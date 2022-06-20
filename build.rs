@@ -1,6 +1,7 @@
 use std::{env, fs, io, path, process};
 
 fn main() {
+    println!("cargo:rerun-if-changed=resources/messages.mc");
     let out_dir = env::var("OUT_DIR").unwrap();
     let out_path = path::PathBuf::from(&out_dir);
     // on windows use mc.exe and rc.exe to compile the message text files and link those
