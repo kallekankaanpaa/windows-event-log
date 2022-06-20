@@ -3,13 +3,14 @@ use windows::Win32::Foundation::PSID;
 use windows::Win32::System::EventLog::{
     DeregisterEventSource, EventSourceHandle, RegisterEventSourceW, ReportEventW, REPORT_EVENT_TYPE,
 };
-include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 use std::fmt;
 use std::ptr;
 
 mod registry;
-const EVENT_LOG_REG_BASE: &str = r"SYSTEM\CurrentControlSet\Services\EventLog";
+
+include!(concat!(env!("OUT_DIR"), "/messages.rs"));
+
 #[derive(Debug)]
 pub enum EventLogKey<'a> {
     Application,
@@ -60,7 +61,6 @@ impl EventLog {
         };
         log::set_boxed_logger(Box::new(logger))?;
         log::set_max_level(log::LevelFilter::Trace);
-        println!("Logger initalized");
         Ok(())
     }
 }

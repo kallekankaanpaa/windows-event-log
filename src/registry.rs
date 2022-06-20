@@ -6,7 +6,8 @@ use windows::Win32::System::Registry::{
 };
 
 use crate::EventLogKey;
-use crate::EVENT_LOG_REG_BASE;
+
+const EVENT_LOG_REG_BASE: &str = r"SYSTEM\CurrentControlSet\Services\EventLog";
 
 pub fn set_message_file_location(key: EventLogKey, source: &str) {
     let mut subkey: ffi::OsString = ffi::OsString::from(EVENT_LOG_REG_BASE);
@@ -28,7 +29,7 @@ pub fn set_message_file_location(key: EventLogKey, source: &str) {
     };
 
     if open_result.is_err() {
-        println!("open reg key failed: {}", open_result.0)
+        panic!("open reg key failed: {}", open_result.0)
     }
 
     let os_string_path: ffi::OsString = env::current_exe().unwrap().into();
@@ -65,6 +66,6 @@ pub fn set_message_file_location(key: EventLogKey, source: &str) {
     };
 
     if result.is_err() {
-        println!("Error setting the key: {}", result.0)
+        panic!("Error setting the key: {}", result.0)
     }
 }
