@@ -7,6 +7,7 @@ use windows::Win32::System::EventLog::{
 use std::fmt;
 use std::ptr;
 
+mod error;
 mod registry;
 
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
@@ -35,6 +36,8 @@ pub enum EventLogError {
     RegisterFailed(#[from] windows::core::Error),
     #[error("Logger can only be initalized once")]
     InitalizationFailed(#[from] log::SetLoggerError),
+    #[error("Failed to set message file registry entry")]
+    RegistryError(#[from] error::RegistryError),
 }
 
 pub struct EventLog {
@@ -49,7 +52,7 @@ impl EventLog {
         level: log::Level,
     ) -> std::result::Result<(), EventLogError> {
         // Set necessary reg key
-        registry::set_message_file_location(key, source);
+        registry::set_message_file_location(key, source)?;
 
         let event_source: Vec<u16> = str::encode_utf16(&format!("{}\0", source)).collect();
         let handle =
@@ -138,7 +141,7 @@ fn log_to_event_log() {
         log::Level::Trace,
     )
     .expect("init failed");
-    log::info!("Test log")
+    //log::info!("Test log")
 }
 
 #[test]

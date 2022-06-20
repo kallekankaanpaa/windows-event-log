@@ -5,16 +5,15 @@ use windows::Win32::System::Registry::{
     RegOpenKeyExW, RegSetKeyValueW, HKEY, HKEY_LOCAL_MACHINE, KEY_READ, REG_SZ,
 };
 
+use crate::error::{format_win_error, RegistryError};
 use crate::EventLogKey;
 
 const EVENT_LOG_REG_BASE: &str = r"SYSTEM\CurrentControlSet\Services\EventLog";
 
-pub fn set_message_file_location(key: EventLogKey, source: &str) {
+pub fn set_message_file_location(key: EventLogKey, source: &str) -> Result<(), RegistryError> {
     let mut subkey: ffi::OsString = ffi::OsString::from(EVENT_LOG_REG_BASE);
     subkey.push("\0");
     let subkey_char_seq: Vec<u16> = subkey.as_os_str().encode_wide().collect();
-
-    println!("{:?}", subkey);
 
     let mut subkey_handle = HKEY::default();
 
@@ -29,11 +28,13 @@ pub fn set_message_file_location(key: EventLogKey, source: &str) {
     };
 
     if open_result.is_err() {
-        panic!("open reg key failed: {}", open_result.0)
+        let error = format_win_error(open_result);
+        return Err(RegistryError::FailedToOpen(
+            error.unwrap_or("failed to format error".to_owned()),
+        ));
     }
 
     let os_string_path: ffi::OsString = env::current_exe().unwrap().into();
-    println!("{:?}", os_string_path);
     let mut path: Vec<u16> = os_string_path.as_os_str().encode_wide().collect();
     path.push(0);
 
@@ -48,13 +49,8 @@ pub fn set_message_file_location(key: EventLogKey, source: &str) {
             .encode_wide()
             .collect();
     key_and_source.push(0);
-    println!("{:?}", path);
-    println!("{:?}", value_name);
-    println!("{:?}", key_and_source);
 
     let result = unsafe {
-        println!("{}", path.len());
-
         RegSetKeyValueW(
             subkey_handle,
             PCWSTR(key_and_source.as_ptr()),
@@ -66,6 +62,10 @@ pub fn set_message_file_location(key: EventLogKey, source: &str) {
     };
 
     if result.is_err() {
-        panic!("Error setting the key: {}", result.0)
+        let error = format_win_error(result);
+        return Err(RegistryError::FailedToSet(
+            error.unwrap_or("failed to format error".to_owned()),
+        ));
     }
+    Ok(())
 }
