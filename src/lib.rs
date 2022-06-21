@@ -7,26 +7,34 @@ use windows::Win32::System::EventLog::{
 use std::fmt;
 use std::ptr;
 
+mod builder;
 mod error;
 mod registry;
 
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 #[derive(Debug)]
-pub enum EventLogKey<'a> {
+pub enum EventLogKey {
     Application,
     /// Using Security will always fail
     Security,
     System,
-    Custom(&'a str),
+    Custom(String),
 }
 
-impl fmt::Display for EventLogKey<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl fmt::Display for EventLogKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Custom(key) => write!(f, "{}", key),
             _ => write!(f, "{:?}", self),
         }
+    }
+}
+
+/// Set Application as default for EventLogKey since it's the default in windows
+impl Default for EventLogKey {
+    fn default() -> Self {
+        EventLogKey::Application
     }
 }
 
@@ -43,6 +51,14 @@ pub enum EventLogError {
 pub struct EventLog {
     handle: EventSourceHandle,
     level: log::Level,
+}
+
+pub(crate) fn register_event_source(source: &str) -> Result<EventSourceHandle, EventLogError> {
+    let mut source_char_seq = str::encode_utf16(source).collect::<Vec<u16>>();
+    source_char_seq.push(0);
+    let handle =
+        unsafe { RegisterEventSourceW(PCWSTR(ptr::null()), PCWSTR(source_char_seq.as_ptr()))? };
+    Ok(handle)
 }
 
 impl EventLog {
@@ -65,6 +81,10 @@ impl EventLog {
         log::set_boxed_logger(Box::new(logger))?;
         log::set_max_level(log::LevelFilter::Trace);
         Ok(())
+    }
+
+    pub fn builder() -> builder::EventLogBuilder {
+        builder::EventLogBuilder::default()
     }
 }
 
@@ -136,7 +156,7 @@ pub enum EventLogType {
 #[test]
 fn log_to_event_log() {
     EventLog::init(
-        EventLogKey::Custom("AAPPLICATION"),
+        EventLogKey::Custom("AAPPLICATION".to_string()),
         "AAATEST",
         log::Level::Trace,
     )
@@ -149,9 +169,12 @@ fn event_log_key_display() {
     assert_eq!(EventLogKey::Application.to_string(), "Application");
     assert_eq!(EventLogKey::Security.to_string(), "Security");
     assert_eq!(EventLogKey::System.to_string(), "System");
-    assert_eq!(EventLogKey::Custom("Custom").to_string(), "Custom");
     assert_eq!(
-        EventLogKey::Custom("WindowsEventLog").to_string(),
+        EventLogKey::Custom("Custom".to_string()).to_string(),
+        "Custom"
+    );
+    assert_eq!(
+        EventLogKey::Custom("WindowsEventLog".to_string()).to_string(),
         "WindowsEventLog"
     );
 }
