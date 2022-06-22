@@ -53,14 +53,6 @@ pub struct EventLog {
     level: log::Level,
 }
 
-pub(crate) fn register_event_source(source: &str) -> Result<EventSourceHandle, EventLogError> {
-    let mut source_char_seq = str::encode_utf16(source).collect::<Vec<u16>>();
-    source_char_seq.push(0);
-    let handle =
-        unsafe { RegisterEventSourceW(PCWSTR(ptr::null()), PCWSTR(source_char_seq.as_ptr()))? };
-    Ok(handle)
-}
-
 impl EventLog {
     pub fn init(
         key: EventLogKey,
@@ -85,6 +77,14 @@ impl EventLog {
 
     pub fn builder() -> builder::EventLogBuilder {
         builder::EventLogBuilder::default()
+    }
+
+    pub fn register_event_source(source: &str) -> Result<EventSourceHandle, EventLogError> {
+        let mut source_char_seq = str::encode_utf16(source).collect::<Vec<u16>>();
+        source_char_seq.push(0);
+        let handle =
+            unsafe { RegisterEventSourceW(PCWSTR(ptr::null()), PCWSTR(source_char_seq.as_ptr()))? };
+        Ok(handle)
     }
 }
 

@@ -1,11 +1,21 @@
 use crate::{registry, *};
 
-#[derive(Default)]
 pub struct EventLogBuilder {
     set_registry: bool,
     level: Option<log::Level>,
     event_log_key: EventLogKey,
-    event_source: String,
+    event_source: Option<String>,
+}
+
+impl Default for EventLogBuilder {
+    fn default() -> Self {
+        Self {
+            set_registry: false,
+            level: None,
+            event_log_key: EventLogKey::default(),
+            event_source: None,
+        }
+    }
 }
 
 impl EventLogBuilder {
@@ -24,17 +34,22 @@ impl EventLogBuilder {
         self
     }
 
-    pub fn event_source<T: Into<String>>(mut self, source: T) -> Self {
-        self.event_source = source.into();
+    pub fn event_source(mut self, source: impl Into<String>) -> Self {
+        self.event_source = Some(source.into());
         self
     }
 
-    pub fn register(self) {
-        if self.set_registry {
-            let result =
-                registry::set_message_file_location(self.event_log_key, &self.event_source);
+    pub fn register(self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.event_source.is_none() {
+            panic!("event source is required");
         }
-        let handle = register_event_source(&self.event_source).unwrap();
+        let event_source = self.event_source.unwrap();
+
+        if self.set_registry {
+            registry::set_message_file_location(self.event_log_key, &event_source)?;
+        }
+
+        let handle = EventLog::register_event_source(&event_source)?;
 
         if self.level.is_none() {
             panic!("level needs to be set");
@@ -44,16 +59,18 @@ impl EventLogBuilder {
             handle: handle,
             level: self.level.unwrap(),
         };
-        log::set_boxed_logger(Box::new(logger));
+        log::set_boxed_logger(Box::new(logger))?;
         log::set_max_level(log::LevelFilter::Trace);
+        Ok(())
     }
 }
 
 #[test]
 fn builder_pattern() {
-    EventLog::builder()
+    assert!(EventLog::builder()
         .level(log::Level::Info)
         .event_source("Builder Test")
         .set_registry(false)
-        .register();
+        .register()
+        .is_ok());
 }
