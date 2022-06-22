@@ -10,7 +10,9 @@ use crate::EventLogKey;
 
 const EVENT_LOG_REG_BASE: &str = r"SYSTEM\CurrentControlSet\Services\EventLog";
 
-pub fn set_message_file_location(key: EventLogKey, source: &str) -> Result<(), RegistryError> {
+/// Sets EventMessageFile registry key to point to current executable.
+/// Requires admin rights.
+pub fn set_message_file_location(key: &EventLogKey, source: &str) -> Result<(), RegistryError> {
     let mut subkey: ffi::OsString = ffi::OsString::from(EVENT_LOG_REG_BASE);
     subkey.push("\0");
     let subkey_char_seq: Vec<u16> = subkey.as_os_str().encode_wide().collect();

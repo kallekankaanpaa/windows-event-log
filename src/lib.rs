@@ -4,29 +4,35 @@ use windows::Win32::System::EventLog::{
     DeregisterEventSource, EventSourceHandle, RegisterEventSourceW, ReportEventW, REPORT_EVENT_TYPE,
 };
 
-use std::fmt;
-use std::ptr;
+use std::{ptr, string};
 
-mod builder;
 mod error;
+mod messages;
 mod registry;
 
-include!(concat!(env!("OUT_DIR"), "/messages.rs"));
-
+/// The key under which events get logged in.
+///
+/// Most programs should use either the default Application log or create a
+/// custom log.
+///
+/// [More info in Win32 documentation]([https://docs.microsoft.com/en-us/windows/win32/eventlog/event-sources)
 #[derive(Debug)]
 pub enum EventLogKey {
+    /// Application log is the default and most programs should be using it
     Application,
-    /// Using Security will always fail
+    /// Security is reserved for Windows internals only so using it will always fail
     Security,
+    /// Device drivers should should add their sources to System log
     System,
+    /// Custom logs can be created for application or services
     Custom(String),
 }
 
-impl fmt::Display for EventLogKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl string::ToString for EventLogKey {
+    fn to_string(&self) -> String {
         match self {
-            Self::Custom(key) => write!(f, "{}", key),
-            _ => write!(f, "{:?}", self),
+            Self::Custom(key) => key.into(),
+            _ => format!("{:?}", self),
         }
     }
 }
@@ -48,38 +54,44 @@ pub enum EventLogError {
     RegistryError(#[from] error::RegistryError),
 }
 
-pub struct EventLog {
+struct InnerLogger {
     handle: EventSourceHandle,
     level: log::Level,
 }
 
+pub struct EventLog {
+    pub level: log::Level,
+    pub source: String,
+    pub event_log_key: EventLogKey,
+}
+
 impl EventLog {
-    pub fn init(
-        key: EventLogKey,
-        source: &str,
-        level: log::Level,
-    ) -> std::result::Result<(), EventLogError> {
-        // Set necessary reg key
-        registry::set_message_file_location(key, source)?;
-
-        let event_source: Vec<u16> = str::encode_utf16(&format!("{}\0", source)).collect();
-        let handle =
-            unsafe { RegisterEventSourceW(PCWSTR(ptr::null()), PCWSTR(event_source.as_ptr()))? };
-
-        let logger = Self {
-            handle: handle,
+    pub fn new(key: EventLogKey, source: impl Into<String>, level: log::Level) -> Self {
+        Self {
             level: level,
+            source: source.into(),
+            event_log_key: key,
+        }
+    }
+
+    pub fn set_message_file_location(self) -> Result<Self, Box<dyn std::error::Error>> {
+        registry::set_message_file_location(&self.event_log_key, &self.source)?;
+        Ok(self)
+    }
+
+    pub fn register(self) -> Result<Self, Box<dyn std::error::Error>> {
+        let handle = Self::register_event_source(&self.source)?;
+
+        let logger = InnerLogger {
+            handle: handle,
+            level: self.level,
         };
         log::set_boxed_logger(Box::new(logger))?;
         log::set_max_level(log::LevelFilter::Trace);
-        Ok(())
+        Ok(self)
     }
 
-    pub fn builder() -> builder::EventLogBuilder {
-        builder::EventLogBuilder::default()
-    }
-
-    pub fn register_event_source(source: &str) -> Result<EventSourceHandle, EventLogError> {
+    fn register_event_source(source: &str) -> Result<EventSourceHandle, EventLogError> {
         let mut source_char_seq = str::encode_utf16(source).collect::<Vec<u16>>();
         source_char_seq.push(0);
         let handle =
@@ -88,7 +100,7 @@ impl EventLog {
     }
 }
 
-impl log::Log for EventLog {
+impl log::Log for InnerLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
         metadata.level() <= self.level
     }
@@ -105,11 +117,11 @@ impl log::Log for EventLog {
         code_points.push(0);
 
         let type_and_id = match record.level() {
-            log::Level::Error => (EventLogType::Error, ERROR),
-            log::Level::Warn => (EventLogType::Warning, WARNING),
-            log::Level::Info => (EventLogType::Information, INFO),
-            log::Level::Debug => (EventLogType::Information, DEBUG),
-            log::Level::Trace => (EventLogType::Information, TRACE),
+            log::Level::Error => (EventLogType::Error, messages::ERROR),
+            log::Level::Warn => (EventLogType::Warning, messages::WARNING),
+            log::Level::Info => (EventLogType::Information, messages::INFO),
+            log::Level::Debug => (EventLogType::Information, messages::DEBUG),
+            log::Level::Trace => (EventLogType::Information, messages::TRACE),
         };
 
         let success = unsafe {
@@ -133,7 +145,7 @@ impl log::Log for EventLog {
     }
 }
 
-impl Drop for EventLog {
+impl Drop for InnerLogger {
     fn drop(&mut self) {
         let success = unsafe { DeregisterEventSource(self.handle).as_bool() };
 
@@ -144,7 +156,8 @@ impl Drop for EventLog {
     }
 }
 
-pub enum EventLogType {
+#[allow(dead_code)]
+enum EventLogType {
     Success = 0x0000,
     AuditFailure = 0x0010,
     AuditSuccess = 0x0008,
@@ -155,13 +168,16 @@ pub enum EventLogType {
 
 #[test]
 fn log_to_event_log() {
-    EventLog::init(
+    EventLog::new(
         EventLogKey::Custom("AAPPLICATION".to_string()),
         "AAATEST",
         log::Level::Trace,
     )
-    .expect("init failed");
-    //log::info!("Test log")
+    .set_message_file_location()
+    .unwrap()
+    .register()
+    .unwrap();
+    log::info!("Test log")
 }
 
 #[test]
