@@ -4,55 +4,13 @@ use windows::Win32::System::EventLog::{
     DeregisterEventSource, EventSourceHandle, RegisterEventSourceW, ReportEventW, REPORT_EVENT_TYPE,
 };
 
-use std::{ptr, string};
+use std::ptr;
 
 mod error;
+mod key;
 mod messages;
 mod registry;
-
-/// The key under which events get logged in.
-///
-/// Most programs should use either the default Application log or create a
-/// custom log.
-///
-/// [More info in Win32 documentation]([https://docs.microsoft.com/en-us/windows/win32/eventlog/event-sources)
-#[derive(Debug)]
-pub enum EventLogKey {
-    /// Application log is the default and most programs should be using it
-    Application,
-    /// Security is reserved for Windows internals only so using it will always fail
-    Security,
-    /// Device drivers should should add their sources to System log
-    System,
-    /// Custom logs can be created for application or services
-    Custom(String),
-}
-
-impl string::ToString for EventLogKey {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Custom(key) => key.into(),
-            _ => format!("{:?}", self),
-        }
-    }
-}
-
-/// Set Application as default for EventLogKey since it's the default in windows
-impl Default for EventLogKey {
-    fn default() -> Self {
-        EventLogKey::Application
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum EventLogError {
-    #[error("Couldn't register/open event source: {0}")]
-    RegisterFailed(#[from] windows::core::Error),
-    #[error("Logger can only be initalized once")]
-    InitalizationFailed(#[from] log::SetLoggerError),
-    #[error("Failed to set message file registry entry")]
-    RegistryError(#[from] error::RegistryError),
-}
+pub use key::*;
 
 struct InnerLogger {
     handle: EventSourceHandle,
@@ -100,7 +58,7 @@ impl EventLog {
     }
 
     /// Calls the win32 (RegisterEventSourceW)[https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-registereventsourcew] function with the configured source
-    fn register_event_source(source: &str) -> Result<EventSourceHandle, EventLogError> {
+    fn register_event_source(source: &str) -> Result<EventSourceHandle, error::EventLogError> {
         let mut source_char_seq = str::encode_utf16(source).collect::<Vec<u16>>();
         source_char_seq.push(0);
         let handle =
@@ -133,7 +91,7 @@ impl log::Log for InnerLogger {
             log::Level::Trace => (EventLogType::Information, messages::TRACE),
         };
 
-        let success = unsafe {
+        unsafe {
             ReportEventW(
                 self.handle,
                 REPORT_EVENT_TYPE(type_and_id.0 as u16),
@@ -144,24 +102,14 @@ impl log::Log for InnerLogger {
                 &[PWSTR(code_points.as_mut_ptr())],
                 ptr::null(),
             )
-            .as_bool()
-        };
-
-        if !success {
-            // Should the logger panic if it fails to log?
-            panic!("Writing log entry failed");
+            .as_bool();
         }
     }
 }
 
 impl Drop for InnerLogger {
     fn drop(&mut self) {
-        let success = unsafe { DeregisterEventSource(self.handle).as_bool() };
-
-        if !success {
-            // Does panicing here make sense?
-            panic!("Deregistering Event Log handle failed");
-        }
+        unsafe { DeregisterEventSource(self.handle).as_bool() };
     }
 }
 
@@ -187,19 +135,4 @@ fn log_to_event_log() {
     .register()
     .unwrap();
     log::info!("Test log")
-}
-
-#[test]
-fn event_log_key_display() {
-    assert_eq!(EventLogKey::Application.to_string(), "Application");
-    assert_eq!(EventLogKey::Security.to_string(), "Security");
-    assert_eq!(EventLogKey::System.to_string(), "System");
-    assert_eq!(
-        EventLogKey::Custom("Custom".to_string()).to_string(),
-        "Custom"
-    );
-    assert_eq!(
-        EventLogKey::Custom("WindowsEventLog".to_string()).to_string(),
-        "WindowsEventLog"
-    );
 }

@@ -64,6 +64,9 @@ pub fn set_message_file_location(key: &EventLogKey, source: &str) -> Result<(), 
     };
 
     if result.is_err() {
+        if result.0 == 5 {
+            return Err(RegistryError::AdminPrivilegesRequired);
+        }
         let error = format_win_error(result);
         return Err(RegistryError::FailedToSet(
             error.unwrap_or_else(|| String::from("failed to format error")),

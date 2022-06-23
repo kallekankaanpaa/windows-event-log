@@ -17,6 +17,18 @@ pub enum RegistryError {
     FailedToOpen(String),
     #[error("Failed to set the registry key: {0}")]
     FailedToSet(String),
+    #[error("Setting HKEY_LOCAL_MACHINE registry keys requires admin privileges")]
+    AdminPrivilegesRequired,
+}
+
+#[derive(Error, Debug)]
+pub enum EventLogError {
+    #[error("Couldn't register/open event source: {0}")]
+    RegisterFailed(#[from] windows::core::Error),
+    #[error("Logger can only be initalized once")]
+    InitalizationFailed(#[from] log::SetLoggerError),
+    #[error("Failed to set message file registry entry")]
+    RegistryError(#[from] RegistryError),
 }
 
 pub fn format_win_error(error: WIN32_ERROR) -> Option<String> {
