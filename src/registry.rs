@@ -32,7 +32,7 @@ pub fn set_message_file_location(key: &EventLogKey, source: &str) -> Result<(), 
     if open_result.is_err() {
         let error = format_win_error(open_result);
         return Err(RegistryError::FailedToOpen(
-            error.unwrap_or("failed to format error".to_owned()),
+            error.unwrap_or_else(|| String::from("failed to format error")),
         ));
     }
 
@@ -66,7 +66,7 @@ pub fn set_message_file_location(key: &EventLogKey, source: &str) -> Result<(), 
     if result.is_err() {
         let error = format_win_error(result);
         return Err(RegistryError::FailedToSet(
-            error.unwrap_or("failed to format error".to_owned()),
+            error.unwrap_or_else(|| String::from("failed to format error")),
         ));
     }
     Ok(())

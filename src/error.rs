@@ -36,7 +36,7 @@ pub fn format_win_error(error: WIN32_ERROR) -> Option<String> {
                 ptr::null_mut(),
             );
             let output_buffer = std::slice::from_raw_parts(buffer, output_len as _);
-            LocalFree(std::mem::transmute(buffer));
+            LocalFree(buffer as isize);
 
             Some(String::from_utf16_lossy(output_buffer))
         }

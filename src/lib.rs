@@ -68,7 +68,7 @@ pub struct EventLog {
 impl EventLog {
     pub fn new(key: EventLogKey, source: impl Into<String>, level: log::Level) -> Self {
         Self {
-            level: level,
+            level,
             source: source.into(),
             event_log_key: key,
         }
@@ -83,7 +83,7 @@ impl EventLog {
         let handle = Self::register_event_source(&self.source)?;
 
         let logger = InnerLogger {
-            handle: handle,
+            handle,
             level: self.level,
         };
         log::set_boxed_logger(Box::new(logger))?;
