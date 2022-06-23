@@ -59,13 +59,15 @@ struct InnerLogger {
     level: log::Level,
 }
 
+/// Data struct used to configure and register the event source
 pub struct EventLog {
-    pub level: log::Level,
-    pub source: String,
-    pub event_log_key: EventLogKey,
+    level: log::Level,
+    source: String,
+    event_log_key: EventLogKey,
 }
 
 impl EventLog {
+    /// Constructs a new EventLog
     pub fn new(key: EventLogKey, source: impl Into<String>, level: log::Level) -> Self {
         Self {
             level,
@@ -74,11 +76,17 @@ impl EventLog {
         }
     }
 
+    /// Sets the `EventMessageFile` registry key to point to current executable
+    ///
+    /// Requires admin privileges
+    /// Calling this function is only necessary once on install, if the executable doesn't move.
+    /// Programs which need to be run as Administrator anyways may call this function every time they register their logger
     pub fn set_message_file_location(self) -> Result<Self, Box<dyn std::error::Error>> {
         registry::set_message_file_location(&self.event_log_key, &self.source)?;
         Ok(self)
     }
 
+    /// Registers the event source, and sets up the logger
     pub fn register(self) -> Result<Self, Box<dyn std::error::Error>> {
         let handle = Self::register_event_source(&self.source)?;
 
@@ -91,6 +99,7 @@ impl EventLog {
         Ok(self)
     }
 
+    /// Calls the win32 (RegisterEventSourceW)[https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-registereventsourcew] function with the configured source
     fn register_event_source(source: &str) -> Result<EventSourceHandle, EventLogError> {
         let mut source_char_seq = str::encode_utf16(source).collect::<Vec<u16>>();
         source_char_seq.push(0);
